@@ -1,33 +1,39 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { assertRole, MAINTAIN_ROLES, requireAuth, type AppEnv } from '../lib/auth.js';
-import { badRequest, conflict, notFound } from '../lib/errors.js';
+import { audit } from '../lib/audit.js';
+import { conflict, notFound } from '../lib/errors.js';
 import { cmmsSync } from '../lib/integrations.js';
+import { RATE_LIMITS, rateLimit } from '../lib/ratelimit.js';
+import { parseJson, safeText, uuid } from '../lib/security.js';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { isPumpEngaged } from '../sim/engine.js';
 import { insertEvents, normalizeEquipment, persistEquipment } from '../sim/service.js';
 
 export const equipmentRoute = new Hono<AppEnv>();
 equipmentRoute.use('*', requireAuth);
+equipmentRoute.use('*', rateLimit(RATE_LIMITS.maintenance));
 
-const maintenanceSchema = z.object({
-  underMaintenance: z.boolean(),
-  note: z.string().trim().max(500).optional(),
-});
+const maintenanceSchema = z
+  .object({
+    underMaintenance: z.boolean(),
+    note: safeText(500).optional(),
+  })
+  .strict();
 
 /** Lock out / release equipment for maintenance. */
 equipmentRoute.post('/:id/maintenance', async (c) => {
   const user = assertRole(c, MAINTAIN_ROLES, 'change the maintenance status of equipment');
-  const parsed = maintenanceSchema.safeParse(await c.req.json().catch(() => ({})));
-  if (!parsed.success) throw badRequest('Invalid payload', parsed.error.flatten());
+  const parsed = await parseJson(c, maintenanceSchema);
   const id = c.req.param('id');
+  if (!uuid.safeParse(id).success) throw notFound('Equipment not found');
   const db = supabaseAdmin();
 
   const { data: row, error } = await db.from('equipment').select('*').eq('id', id).maybeSingle();
   if (error) throw error;
   if (!row) throw notFound('Equipment not found');
   const eq = normalizeEquipment(row);
-  const { underMaintenance, note } = parsed.data;
+  const { underMaintenance, note } = parsed;
 
   if (eq.under_maintenance === underMaintenance) {
     throw conflict(underMaintenance ? `${eq.tag} is already under maintenance` : `${eq.tag} is not under maintenance`);
@@ -71,5 +77,6 @@ equipmentRoute.post('/:id/maintenance', async (c) => {
     },
     cmmsSync(underMaintenance ? 'lockout' : 'release', eq.tag, 'system'),
   ]);
+  await audit(c, { action: underMaintenance ? 'equipment.lockout' : 'equipment.release', outcome: 'success', status: 200, details: { plantId: eq.plant_id, tag: eq.tag } });
   return c.json({ equipment: eq });
 });

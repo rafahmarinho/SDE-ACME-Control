@@ -1,18 +1,20 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { assertRole, requireAuth, SIMULATE_ROLES, type AppEnv } from '../lib/auth.js';
-import { badRequest } from '../lib/errors.js';
+import { audit } from '../lib/audit.js';
+import { RATE_LIMITS, rateLimit } from '../lib/ratelimit.js';
+import { parseJson, shortCode, uuid } from '../lib/security.js';
 import { SCENARIOS } from '../sim/scenarios.js';
 import { loadScenario, resetDemoData, runSimulation, setRunning, tick } from '../sim/service.js';
 
 export const simRoute = new Hono<AppEnv>();
 simRoute.use('*', requireAuth);
 
-const plantSchema = z.object({ plantId: z.string().uuid() });
-const advanceSchema = plantSchema.extend({ seconds: z.number().int().min(1).max(4 * 3600) });
-const scenarioSchema = plantSchema.extend({ scenario: z.string().min(1) });
-const controlSchema = plantSchema.extend({ running: z.boolean(), speed: z.number().min(0.5).max(60).optional() });
-const resetSchema = z.object({ plantId: z.string().uuid().optional() });
+const plantSchema = z.object({ plantId: uuid }).strict();
+const advanceSchema = plantSchema.extend({ seconds: z.number().int().min(1).max(4 * 3600) }).strict();
+const scenarioSchema = plantSchema.extend({ scenario: shortCode }).strict();
+const controlSchema = plantSchema.extend({ running: z.boolean(), speed: z.number().min(0.5).max(60).optional() }).strict();
+const resetSchema = z.object({ plantId: uuid.optional() }).strict();
 
 function describeDuration(seconds: number): string {
   if (seconds % 3600 === 0) return `${seconds / 3600} h`;
@@ -25,10 +27,9 @@ simRoute.get('/scenarios', (c) => {
 });
 
 /** Called by connected clients every couple of seconds while a process screen is open. */
-simRoute.post('/tick', async (c) => {
-  const parsed = plantSchema.safeParse(await c.req.json().catch(() => ({})));
-  if (!parsed.success) throw badRequest('plantId is required');
-  const result = await tick(parsed.data.plantId);
+simRoute.post('/tick', rateLimit(RATE_LIMITS.tick), async (c) => {
+  const parsed = await parseJson(c, plantSchema);
+  const result = await tick(parsed.plantId);
   if (!result) return c.json({ ticked: false });
   return c.json({
     ticked: true,
@@ -39,15 +40,14 @@ simRoute.post('/tick', async (c) => {
   });
 });
 
-simRoute.post('/advance', async (c) => {
+simRoute.post('/advance', rateLimit(RATE_LIMITS.simulation), async (c) => {
   const user = assertRole(c, SIMULATE_ROLES, 'advance the simulation');
-  const parsed = advanceSchema.safeParse(await c.req.json().catch(() => ({})));
-  if (!parsed.success) throw badRequest('Invalid payload', parsed.error.flatten());
-  const { plantId, seconds } = parsed.data;
+  const { plantId, seconds } = await parseJson(c, advanceSchema);
   const result = await runSimulation(plantId, seconds, {
     actor: user.fullName,
     summary: `Simulation advanced by ${describeDuration(seconds)}`,
   });
+  await audit(c, { action: 'sim.advance', outcome: 'success', status: 200, details: { plantId, seconds } });
   return c.json({
     simulatedSeconds: result.simulatedSeconds,
     steps: result.steps,
@@ -59,26 +59,26 @@ simRoute.post('/advance', async (c) => {
   });
 });
 
-simRoute.post('/scenario', async (c) => {
+simRoute.post('/scenario', rateLimit(RATE_LIMITS.simulation), async (c) => {
   const user = assertRole(c, SIMULATE_ROLES, 'load scenarios');
-  const parsed = scenarioSchema.safeParse(await c.req.json().catch(() => ({})));
-  if (!parsed.success) throw badRequest('Invalid payload', parsed.error.flatten());
-  const result = await loadScenario(parsed.data.plantId, parsed.data.scenario, user.fullName);
+  const parsed = await parseJson(c, scenarioSchema);
+  const result = await loadScenario(parsed.plantId, parsed.scenario, user.fullName);
+  await audit(c, { action: 'sim.scenario', outcome: 'success', status: 200, details: { plantId: parsed.plantId, scenario: parsed.scenario } });
   return c.json({ scenario: result.state.scenario, simTime: result.state.sim_time, tanks: result.state.tanks });
 });
 
-simRoute.post('/control', async (c) => {
+simRoute.post('/control', rateLimit(RATE_LIMITS.simulation), async (c) => {
   const user = assertRole(c, SIMULATE_ROLES, 'pause or resume the simulation');
-  const parsed = controlSchema.safeParse(await c.req.json().catch(() => ({})));
-  if (!parsed.success) throw badRequest('Invalid payload', parsed.error.flatten());
-  await setRunning(parsed.data.plantId, parsed.data.running, parsed.data.speed, user.fullName);
+  const parsed = await parseJson(c, controlSchema);
+  await setRunning(parsed.plantId, parsed.running, parsed.speed, user.fullName);
+  await audit(c, { action: 'sim.control', outcome: 'success', status: 200, details: { plantId: parsed.plantId, running: parsed.running, speed: parsed.speed ?? null } });
   return c.json({ ok: true });
 });
 
-simRoute.post('/reset', async (c) => {
+simRoute.post('/reset', rateLimit(RATE_LIMITS.simulation), async (c) => {
   const user = assertRole(c, SIMULATE_ROLES, 'reset the demo data');
-  const parsed = resetSchema.safeParse(await c.req.json().catch(() => ({})));
-  if (!parsed.success) throw badRequest('Invalid payload', parsed.error.flatten());
-  await resetDemoData(user.fullName, parsed.data.plantId);
+  const parsed = await parseJson(c, resetSchema);
+  await resetDemoData(user.fullName, parsed.plantId);
+  await audit(c, { action: 'sim.reset', outcome: 'success', status: 200, details: { plantId: parsed.plantId ?? 'all' } });
   return c.json({ ok: true });
 });

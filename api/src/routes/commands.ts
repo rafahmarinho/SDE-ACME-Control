@@ -1,7 +1,10 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { OPERATE_ROLES, requireAuth, type AppEnv } from '../lib/auth.js';
-import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
+import { OPERATE_ROLES, requireAuth, requireRole, type AppEnv } from '../lib/auth.js';
+import { audit } from '../lib/audit.js';
+import { conflict, notFound } from '../lib/errors.js';
+import { RATE_LIMITS, rateLimit } from '../lib/ratelimit.js';
+import { parseJson, shortCode, uuid } from '../lib/security.js';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { startInterlock } from '../sim/engine.js';
 import { insertEvents, loadContext, persistEquipment, runSimulation } from '../sim/service.js';
@@ -9,12 +12,13 @@ import type { EngineContext, EquipmentRow, UserRole } from '../sim/types.js';
 
 const commandSchema = z
   .object({
-    plantId: z.string().uuid(),
-    equipmentId: z.string().uuid().optional(),
-    tag: z.string().min(1).optional(),
+    plantId: uuid,
+    equipmentId: uuid.optional(),
+    tag: shortCode.optional(),
     type: z.enum(['start', 'stop', 'open', 'close', 'set_mode', 'reset']),
-    value: z.union([z.string(), z.number(), z.boolean()]).optional(),
+    value: z.union([z.enum(['manual', 'auto']), z.number().finite(), z.boolean()]).optional(),
   })
+  .strict()
   .refine((v) => v.equipmentId || v.tag, { message: 'equipmentId or tag is required' });
 
 type CommandType = z.infer<typeof commandSchema>['type'];
@@ -89,12 +93,12 @@ export function applyCommand(eq: EquipmentRow, type: CommandType, value: unknown
 
 export const commandsRoute = new Hono<AppEnv>();
 commandsRoute.use('*', requireAuth);
+commandsRoute.use('*', requireRole(OPERATE_ROLES, 'operate equipment'));
+commandsRoute.use('*', rateLimit(RATE_LIMITS.commands));
 
 commandsRoute.post('/', async (c) => {
   const user = c.get('user');
-  const parsed = commandSchema.safeParse(await c.req.json().catch(() => ({})));
-  if (!parsed.success) throw badRequest('Invalid command payload', parsed.error.flatten());
-  const cmd = parsed.data;
+  const cmd = await parseJson(c, commandSchema);
 
   const ctx = await loadContext(cmd.plantId);
   const eq = ctx.equipment.find((e) => (cmd.equipmentId ? e.id === cmd.equipmentId : e.tag === cmd.tag));
@@ -124,7 +128,7 @@ commandsRoute.post('/', async (c) => {
     await insertEvents(cmd.plantId, [
       { category: 'command', level: 'warning', message: `${label} rejected for ${eq.tag}: ${reason}`, actor: user.fullName, data: { tag: eq.tag, type: cmd.type, command_id: inserted.id } },
     ]);
-    if (!OPERATE_ROLES.includes(user.role)) throw forbidden(reason);
+    await audit(c, { action: `command.${cmd.type}`, outcome: 'rejected', status: 409, details: { plantId: cmd.plantId, tag: eq.tag, reason, commandId: inserted.id } });
     throw conflict(reason, { commandId: inserted.id });
   }
 
@@ -144,5 +148,6 @@ commandsRoute.post('/', async (c) => {
     .single();
   if (updErr) throw updErr;
 
+  await audit(c, { action: `command.${cmd.type}`, outcome: 'success', status: 200, details: { plantId: cmd.plantId, tag: eq.tag, value: cmd.value ?? null, commandId: inserted.id } });
   return c.json({ command: executed, equipment: run.equipment.find((e) => e.id === eq.id) ?? eq });
 });
