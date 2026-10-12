@@ -13,9 +13,16 @@ shift handover. One Supabase project is shared by the web app and the Android / 
 ```
 ACME Control/
 ├─ app/        Flutter application (lib/core, lib/models, lib/services, lib/providers, lib/features, lib/widgets)
-├─ api/        TypeScript API: process engine, commands, scenarios, setpoint review, maintenance lockout
-└─ supabase/   SQL migrations (schema, RLS, realtime, storage, demo-data generator) and seed
+├─ api/        TypeScript API: process engine, commands, scenarios, setpoint review, maintenance lockout,
+│              security middleware (auth, rate limiting, audit log, hardened headers)
+├─ supabase/   SQL migrations (schema, RLS, realtime, storage, demo-data generator, security controls) and seed
+├─ docs/security/  Threat model, controls map and the SD Elements assessment (585 countermeasures)
+├─ scripts/sde/    Builds the assessment and syncs statuses + bilingual notes to SD Elements
+└─ SECURITY.md     Vulnerability reporting policy
 ```
+
+Security documentation: [threat model](docs/security/threat-model.md), [controls map](docs/security/controls.md),
+[SD Elements assessment](docs/security/sde-controls-assessment.json). See the [Security](#5-security) section below.
 
 ## What it does
 
@@ -104,7 +111,20 @@ both Vercel projects, except the server key that only the project owner can read
 
 Local alternative: `supabase start` uses `supabase/config.toml`, applies the migrations and runs `seed.sql`.
 
+5. Security settings (Authentication → Providers → Email / Authentication → Settings): set the **minimum password
+   length to 12**, enable **leaked password protection** (HaveIBeenPwned check) and, if you want a second factor for
+   supervisors and engineers, enable **TOTP MFA**. The app already enforces the password policy (12+ characters,
+   three character classes, deny-list) on the client; these settings make the server enforce it too.
+6. The migration `20261012120000_security_controls.sql` makes the `attachments` bucket **private**, adds the
+   `security_events` audit table, the `rate_limits` table used by the API, column-protection triggers and a nightly
+   `purge_history()` job (pg_cron, trends 7 days / events 90 days / security events 365 days). If pg_cron is not
+   available on your plan, call `select public.purge_history();` from an external scheduler.
+
 ### Demo accounts (password `Acme1234!`)
+
+The demo accounts share one documented password so the demo can be explored. Before any real deployment, delete them
+or rotate their passwords (Authentication → Users). The sign-in page only shows the demo-account shortcuts when the
+app is built with `DEMO_MODE=true`.
 
 | E-mail | Name | Role |
 | --- | --- | --- |
@@ -120,9 +140,17 @@ cd api
 pnpm install
 cp .env.example .env     # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (server side only)
 pnpm dev                 # http://localhost:3001/api  (GET /api/health)
-pnpm test                # engine unit tests
+pnpm test                # engine unit tests + HTTP security tests (headers, verbs, body limits, CORS, auth, rate limiter)
 pnpm typecheck
+pnpm audit --prod        # dependency vulnerabilities (clean at the time of writing)
 ```
+
+Every request gets an `X-Request-Id`; errors return `{error, message, requestId}` without internals. Requests are
+throttled per user and route group (commands 40/min, simulation 20/min, ticks 120/min, setpoints 30/min, maintenance
+30/min, failed authentications 30/min per IP) and answered with `429` + `Retry-After` when exceeded. Authentication
+failures, authorization denials, commands, setpoint reviews, lockouts and simulation control are written to the
+`security_events` table (visible to supervisors on the **Security** page). `CORS_ORIGINS` must list the web app
+origins; `*` works for quick demos but is logged as a warning.
 
 Endpoints (all need `Authorization: Bearer <supabase access token>`):
 
@@ -162,7 +190,7 @@ tooling (`flutter doctor`).
 
 ```bash
 cd app
-cp env.example.json env.json          # SUPABASE_URL, SUPABASE_ANON_KEY, API_BASE_URL, WEB_APP_URL
+cp env.example.json env.json          # SUPABASE_URL, SUPABASE_ANON_KEY, API_BASE_URL, WEB_APP_URL, DEMO_MODE
 flutter pub get
 flutter run -d chrome --web-port 3000 --dart-define-from-file=env.json
 ```
@@ -170,8 +198,15 @@ flutter run -d chrome --web-port 3000 --dart-define-from-file=env.json
 `API_BASE_URL` is `http://localhost:3001/api` with `pnpm dev`, or `https://<api-project>.vercel.app/api`
 (on the Android emulator use `http://10.0.2.2:3001/api`, on a physical phone the LAN IP of your machine).
 `SUPABASE_ANON_KEY` accepts the project's publishable key (`sb_publishable_…`) or the legacy anon JWT.
-`WEB_APP_URL` is where the web app is served (used in password-recovery links). Configuration is injected at build
+`WEB_APP_URL` is where the web app is served (used in password-recovery links). `DEMO_MODE=true` shows the
+demo-account shortcuts on the sign-in page (keep it `false` for real deployments). Configuration is injected at build
 time with `--dart-define-from-file`; never put the service role key in the app.
+
+Session security: the session is stored in the Android Keystore / iOS Keychain (`flutter_secure_storage`), the app
+signs the user out after 30 minutes without interaction (configurable in Settings → Security) or 12 hours after
+sign-in, and sign-out wipes the offline cache. Password changes require the current password. Supervisors see the
+**Security** page with the audit log. For store builds add `--obfuscate --split-debug-info=build/symbols` to the
+`flutter build apk|appbundle|ipa` commands.
 
 Other useful commands:
 
@@ -226,6 +261,42 @@ flutter build ipa --release --dart-define-from-file=env.json          # build/io
 * `ios/Runner/Info.plist` declares the `acmecontrol` URL scheme and the camera / photo library usage descriptions.
 * `cd ios && pod install` if CocoaPods reports missing pods.
 
+## 5. Security
+
+The threat model was built with **SD Elements** (business unit AcmeBank → application ACME Control → project
+*ACME Control - Water Treatment Supervisory System*, id 29). The survey describes the stack above; SD Elements
+generated 585 countermeasures (93 risk-relevant). Each one was assessed against the code and recorded with a note in
+Brazilian Portuguese and English signed "RafahMarinho with Agentic AI".
+
+| Document | Content |
+| --- | --- |
+| [docs/security/threat-model.md](docs/security/threat-model.md) | Assets, actors, trust boundaries, STRIDE threats and mitigations, residual risks |
+| [docs/security/controls.md](docs/security/controls.md) | Where each control lives in the code (API, database, app) |
+| [docs/security/sde-countermeasures.json](docs/security/sde-countermeasures.json) | Countermeasures exported from SD Elements |
+| [docs/security/sde-controls-assessment.json](docs/security/sde-controls-assessment.json) | Status + bilingual note per countermeasure |
+| [SECURITY.md](SECURITY.md) | How to report a vulnerability |
+
+To rebuild the assessment and push it to SD Elements:
+
+```bash
+node scripts/sde/build-assessment.mjs                      # regenerates sde-controls-assessment.json
+SDE_API_KEY=<token> SDE_PROJECT_ID=29 node scripts/sde/sync-sde-tasks.mjs   # PATCH status + POST note per task
+```
+
+Controls implemented in this release (details in controls.md): server-side token verification with generic
+failures and per-IP throttling; centralised role checks with audited denials; separation of duties on setpoint
+review; strict JSON schemas, body size/verb/content-type guards; hardened headers (HSTS, CSP, nosniff, DENY,
+no-store); CORS allow-list; database-backed rate limits; `security_events` audit log readable by supervisors;
+RLS on every table with anonymous access revoked; column-protection and state-machine triggers; private storage
+with signed URLs and path-scoped uploads; nightly data retention purge; password policy and change-password
+re-authentication; idle/absolute session timeouts; encrypted session storage on mobile; CSP on the web app;
+Android backups and cleartext traffic disabled; previous-sign-in notification; demo credentials gated by
+`DEMO_MODE`.
+
+Known gaps (reported as Incomplete in SD Elements): no MFA, no CI pipeline / SAST / DAST / pentest / formal code
+review, no backups on the free Supabase plan, Supabase network restrictions not configured, no root/jailbreak or
+anti-tampering checks, privacy notices and consent not implemented, demo accounts with a shared password.
+
 ## Main flows to check
 
 1. Sign in as **operator**. Overview shows plant KPIs, the top bar shows **Live** and the simulation clock advances.
@@ -242,6 +313,11 @@ flutter build ipa --release --dart-define-from-file=env.json          # build/io
 6. Acknowledge alarms, write a shift handover as **operator** and acknowledge it as **supervisor**.
 7. Reload the page: everything persists. Turn the network off on a phone: the offline banner appears, the latest
    data stays visible, control buttons are disabled; turn it back on and updates resume.
+8. Security: as **supervisor** open **Security** and see the audit entries produced by steps 2–6 (commands,
+   setpoint review, lockout, rejected command). Change your password on the Profile page (current password
+   required, policy enforced). Set the idle timeout to 5 minutes in Settings → Security and wait: the app signs you
+   out with an explanation. Sign in as **maintenance** and try `POST /api/commands` with the session token: the API
+   answers 403 and the denial appears in the security log.
 
 ## Notes
 
