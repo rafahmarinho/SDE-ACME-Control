@@ -1,0 +1,29 @@
+# Node / API
+node_modules/
+.vercel/
+dist/
+*.log
+.env
+.env.*
+!.env.example
+
+# Flutter
+app/.dart_tool/
+app/.packages
+app/build/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/env.json
+app/ios/Pods/
+app/ios/.symlinks/
+app/android/.gradle/
+app/android/local.properties
+app/android/key.properties
+app/android/**/*.keystore
+app/android/**/*.jks
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

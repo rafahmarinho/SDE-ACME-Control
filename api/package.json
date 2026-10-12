@@ -1,0 +1,35 @@
+{
+  "name": "acme-control-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ACME Control - command and simulation API (Hono on Vercel)",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@10.30.0",
+  "scripts": {
+    "dev": "tsx watch src/local.ts",
+    "start": "tsx src/local.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "db:setup": "tsx scripts/db-setup.ts",
+    "db:seed": "tsx scripts/db-setup.ts --seed-only",
+    "seed:users": "tsx scripts/seed-users.ts",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.0",
+    "hono": "^4.7.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@hono/node-server": "^1.14.0",
+    "@types/node": "^22.15.0",
+    "@types/pg": "^8.11.0",
+    "dotenv": "^16.5.0",
+    "pg": "^8.14.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0"
+  }
+}
