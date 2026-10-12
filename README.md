@@ -22,7 +22,7 @@ ACME Control/
 ```
 
 Security documentation: [threat model](docs/security/threat-model.md), [controls map](docs/security/controls.md),
-[SD Elements assessment](docs/security/sde-controls-assessment.json). See the [Security](#5-security) section below.
+[SD Elements assessment](docs/security/sde-controls-assessment.json). See the [Security](#4-security) section below.
 
 ## What it does
 
@@ -261,7 +261,7 @@ flutter build ipa --release --dart-define-from-file=env.json          # build/io
 * `ios/Runner/Info.plist` declares the `acmecontrol` URL scheme and the camera / photo library usage descriptions.
 * `cd ios && pod install` if CocoaPods reports missing pods.
 
-## 5. Security
+## 4. Security
 
 The threat model was built with **SD Elements** (business unit AcmeBank → application ACME Control → project
 *ACME Control - Water Treatment Supervisory System*, id 29). The survey describes the stack above; SD Elements
