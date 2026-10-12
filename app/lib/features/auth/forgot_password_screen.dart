@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/security.dart';
 import '../../core/theme.dart';
 import '../../providers/core_providers.dart';
 import 'auth_scaffold.dart';
@@ -84,6 +86,9 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                     controller: _email,
                     keyboardType: TextInputType.emailAddress,
                     autofocus: true,
+                    maxLength: kMaxShortText,
+                    maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                    buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                     onFieldSubmitted: (_) => _send(),
                     decoration: const InputDecoration(labelText: 'E-mail', prefixIcon: Icon(Icons.mail_outline)),
                     validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid e-mail address' : null,

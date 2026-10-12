@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/formatters.dart';
+import '../core/security.dart';
 import '../core/theme.dart';
 import '../models/equipment.dart';
 import '../providers/auth_providers.dart';
@@ -118,6 +120,9 @@ Future<bool> setEquipmentMaintenance(
             controller: noteController,
             decoration: const InputDecoration(labelText: 'Note (optional)', hintText: 'e.g. Seal replacement, WO-01042'),
             maxLines: 2,
+            maxLength: kMaxShortText,
+            maxLengthEnforcement: MaxLengthEnforcement.enforced,
+            buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
           ),
         ],
       ),
@@ -129,7 +134,7 @@ Future<bool> setEquipmentMaintenance(
   );
   if (ok != true) return false;
   try {
-    await ref.read(apiClientProvider).setMaintenance(equipment.id, underMaintenance: underMaintenance, note: noteController.text.trim());
+    await ref.read(apiClientProvider).setMaintenance(equipment.id, underMaintenance: underMaintenance, note: sanitizeText(noteController.text));
     if (context.mounted) {
       showSnack(context, underMaintenance ? '${equipment.tag} placed under maintenance' : '${equipment.tag} returned to service', success: true);
     }

@@ -79,6 +79,11 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Take photos for maintenance work orders.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

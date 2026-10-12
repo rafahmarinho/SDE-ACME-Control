@@ -22,6 +22,7 @@ import '../features/overview/overview_screen.dart';
 import '../features/plants/plants_screen.dart';
 import '../features/process/process_screen.dart';
 import '../features/profile/profile_screen.dart';
+import '../features/security/security_events_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/setpoints/setpoints_screen.dart';
 import '../features/shell/app_shell.dart';
@@ -65,7 +66,13 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       if (!signedIn && !isAuthRoute) {
         final from = state.uri.toString();
-        return from == '/' || from == '/overview' ? '/login' : '/login?from=${Uri.encodeComponent(from)}';
+        // Automatic sign-outs (idle / expired) explain themselves on the login page.
+        final reason = ref.read(signOutReasonProvider.notifier).consume();
+        final params = <String, String>{
+          if (from != '/' && from != '/overview') 'from': from,
+          if (reason != null) 'reason': reason,
+        };
+        return params.isEmpty ? '/login' : Uri(path: '/login', queryParameters: params).toString();
       }
       if (signedIn && (location == '/login' || location == '/forgot-password')) {
         final from = state.uri.queryParameters['from'];
@@ -82,7 +89,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(path: '/', redirect: (_, __) => '/overview'),
-      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+      GoRoute(path: '/login', builder: (_, state) => LoginScreen(reason: state.uri.queryParameters['reason'])),
       GoRoute(path: '/forgot-password', builder: (_, __) => const ForgotPasswordScreen()),
       GoRoute(path: '/reset-password', builder: (_, __) => const ResetPasswordScreen()),
       ShellRoute(
@@ -131,6 +138,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(path: '/simulation', builder: (_, __) => const SimulationScreen()),
           GoRoute(path: '/plants', builder: (_, __) => const PlantsScreen()),
+          GoRoute(path: '/security', builder: (_, __) => const SecurityEventsScreen()),
           GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
           GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
           GoRoute(path: '/more', builder: (_, __) => const MoreScreen()),

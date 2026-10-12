@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/env.dart';
+import '../../core/security.dart';
 import '../../core/theme.dart';
 import '../../providers/core_providers.dart';
 import 'auth_scaffold.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.reason});
+
+  /// Why the user landed here automatically: `idle` or `expired` (from `?reason=`).
+  final String? reason;
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -27,6 +33,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     ('Supervisor', 'supervisor@acme.demo'),
     ('Maintenance', 'maintenance@acme.demo'),
   ];
+
+  static String? reasonMessage(String? reason) {
+    switch (reason) {
+      case 'idle':
+        return 'You were signed out after a period of inactivity.';
+      case 'expired':
+        return 'Your session expired. Please sign in again.';
+      default:
+        return null;
+    }
+  }
 
   @override
   void dispose() {
@@ -62,12 +79,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (_error == null) AuthInfoBox(reasonMessage(widget.reason)),
               AuthErrorBox(_error),
               TextFormField(
                 controller: _email,
                 keyboardType: TextInputType.emailAddress,
                 autofillHints: const [AutofillHints.username, AutofillHints.email],
                 textInputAction: TextInputAction.next,
+                maxLength: kMaxShortText,
+                maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                 decoration: const InputDecoration(labelText: 'E-mail', prefixIcon: Icon(Icons.mail_outline)),
                 validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid e-mail address' : null,
               ),
@@ -77,6 +98,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 obscureText: _obscure,
                 autofillHints: const [AutofillHints.password],
                 textInputAction: TextInputAction.done,
+                maxLength: kMaxPasswordLength,
+                maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                 onFieldSubmitted: (_) => _signIn(),
                 decoration: InputDecoration(
                   labelText: 'Password',
@@ -103,34 +127,39 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                     : const Text('Sign in'),
               ),
-              const SizedBox(height: 24),
-              const Divider(),
-              const SizedBox(height: 12),
-              Text('Demo accounts', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.muted)),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final (label, email) in _demoAccounts)
-                    ActionChip(
-                      label: Text(label),
-                      avatar: const Icon(Icons.person_outline, size: 16),
-                      onPressed: _busy
-                          ? null
-                          : () {
-                              _email.text = email;
-                              _password.text = 'Acme1234!';
-                              setState(() => _error = null);
-                            },
-                    ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'All demo accounts use the password Acme1234!',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.muted),
-              ),
+              // Demo shortcuts are compiled in only with --dart-define DEMO_MODE=true.
+              if (Env.demoMode) ...[
+                const SizedBox(height: 24),
+                const Divider(),
+                const SizedBox(height: 12),
+                Text('Demo accounts', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.muted)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final (label, email) in _demoAccounts)
+                      ActionChip(
+                        label: Text(label),
+                        avatar: const Icon(Icons.person_outline, size: 16),
+                        onPressed: _busy
+                            ? null
+                            : () {
+                                _email.text = email;
+                                _password.text = Env.demoPassword;
+                                setState(() => _error = null);
+                              },
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  Env.demoPassword.isEmpty
+                      ? 'Demo accounts use the password distributed with the demo environment.'
+                      : 'Demo accounts share the password configured for this demo build.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.muted),
+                ),
+              ],
             ],
           ),
         ),

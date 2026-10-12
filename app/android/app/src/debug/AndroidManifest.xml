@@ -2,6 +2,12 @@
     xmlns:tools="http://schemas.android.com/tools">
     <!-- The INTERNET permission is required to debug with Flutter tooling. -->
     <uses-permission android:name="android.permission.INTERNET"/>
-    <!-- Debug builds may talk to a local API over plain http (e.g. http://10.0.2.2:3001/api). -->
-    <application android:usesCleartextTraffic="true" tools:ignore="UnusedAttribute" />
+    <!-- Debug builds may talk to a local API over plain http (e.g. http://10.0.2.2:3001/api).
+         The release network security config forbids cleartext; this debug-only config
+         re-allows it for local development hosts. -->
+    <application
+        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config_debug"
+        tools:replace="android:usesCleartextTraffic,android:networkSecurityConfig"
+        tools:ignore="UnusedAttribute" />
 </manifest>

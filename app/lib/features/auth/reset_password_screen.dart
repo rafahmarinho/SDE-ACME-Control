@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/security.dart';
 import '../../providers/auth_providers.dart';
 import '../../providers/core_providers.dart';
 import '../../widgets/common.dart';
@@ -76,20 +78,30 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                     controller: _password,
                     obscureText: _obscure,
                     autofocus: true,
+                    autofillHints: const [AutofillHints.newPassword],
+                    maxLength: kMaxPasswordLength,
+                    maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                    buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                     decoration: InputDecoration(
                       labelText: 'New password',
+                      helperText: passwordPolicyHint,
+                      helperMaxLines: 2,
                       prefixIcon: const Icon(Icons.lock_outline),
                       suffixIcon: IconButton(
                         onPressed: () => setState(() => _obscure = !_obscure),
                         icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
                       ),
                     ),
-                    validator: (v) => (v == null || v.length < 8) ? 'Use at least 8 characters' : null,
+                    validator: (v) => validatePassword(v, email: session.user.email),
                   ),
                   const SizedBox(height: 14),
                   TextFormField(
                     controller: _confirm,
                     obscureText: _obscure,
+                    autofillHints: const [AutofillHints.newPassword],
+                    maxLength: kMaxPasswordLength,
+                    maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                    buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                     onFieldSubmitted: (_) => _save(),
                     decoration: const InputDecoration(labelText: 'Confirm password', prefixIcon: Icon(Icons.lock_outline)),
                     validator: (v) => v != _password.text ? 'Passwords do not match' : null,

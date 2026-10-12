@@ -13,7 +13,9 @@ import '../services/maintenance_repository.dart';
 import '../services/offline_cache.dart';
 import '../services/plant_repository.dart';
 import '../services/process_repository.dart';
+import '../services/security_repository.dart';
 import '../services/setpoint_repository.dart';
+import '../services/storage_service.dart';
 import '../services/trend_repository.dart';
 
 /// Overridden in main() with the loaded instance.
@@ -43,3 +45,5 @@ final maintenanceRepositoryProvider = Provider((ref) => MaintenanceRepository(re
 final handoverRepositoryProvider = Provider((ref) => HandoverRepository(ref.watch(supabaseClientProvider)));
 final eventRepositoryProvider = Provider((ref) => EventRepository(ref.watch(supabaseClientProvider)));
 final trendRepositoryProvider = Provider((ref) => TrendRepository(ref.watch(supabaseClientProvider)));
+final securityRepositoryProvider = Provider((ref) => SecurityRepository(ref.watch(supabaseClientProvider)));
+final storageServiceProvider = Provider((ref) => StorageService(ref.watch(supabaseClientProvider)));

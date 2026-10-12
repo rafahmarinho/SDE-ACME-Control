@@ -34,6 +34,9 @@ enum UserRole {
   bool get canProposeSetpoints => canOperate;
 
   bool get canHandover => canOperate;
+
+  /// Read the security audit log (`security_events`, RLS: supervisors only).
+  bool get canViewSecurityLog => this == UserRole.supervisor;
 }
 
 class Profile {
@@ -47,6 +50,8 @@ class Profile {
     this.phone,
     this.defaultPlantId,
     this.updatedAt,
+    this.lastSignInAt,
+    this.previousSignInAt,
   });
 
   final String id;
@@ -54,10 +59,17 @@ class Profile {
   final String fullName;
   final UserRole role;
   final Map<String, dynamic> settings;
+
+  /// Storage path of the picture in the private `attachments` bucket
+  /// (`avatars/<uid>.<ext>`). Old rows may still hold a full public URL.
   final String? avatarUrl;
   final String? phone;
   final String? defaultPlantId;
   final DateTime? updatedAt;
+
+  /// Maintained server-side; never sent back in updates.
+  final DateTime? lastSignInAt;
+  final DateTime? previousSignInAt;
 
   String get displayName => fullName.isNotEmpty ? fullName : email;
 
@@ -86,6 +98,8 @@ class Profile {
         phone: phone ?? this.phone,
         defaultPlantId: defaultPlantId ?? this.defaultPlantId,
         updatedAt: updatedAt,
+        lastSignInAt: lastSignInAt,
+        previousSignInAt: previousSignInAt,
       );
 
   factory Profile.fromJson(Map<String, dynamic> json) => Profile(
@@ -98,8 +112,13 @@ class Profile {
         phone: json['phone'] as String?,
         defaultPlantId: json['default_plant_id'] as String?,
         updatedAt: toDate(json['updated_at']),
+        lastSignInAt: toDate(json['last_sign_in_at']),
+        previousSignInAt: toDate(json['previous_sign_in_at']),
       );
 
+  /// Used for the offline cache only. Server updates go through
+  /// `AuthService.updateProfile`, which patches explicit fields and never
+  /// writes role, e-mail or the sign-in timestamps.
   Map<String, dynamic> toJson() => {
         'id': id,
         'email': email,
@@ -110,5 +129,7 @@ class Profile {
         'phone': phone,
         'default_plant_id': defaultPlantId,
         'updated_at': updatedAt?.toIso8601String(),
+        'last_sign_in_at': lastSignInAt?.toIso8601String(),
+        'previous_sign_in_at': previousSignInAt?.toIso8601String(),
       };
 }

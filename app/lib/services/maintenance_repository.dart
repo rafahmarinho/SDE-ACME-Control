@@ -82,7 +82,7 @@ class MaintenanceRepository {
           bytes,
           fileOptions: FileOptions(contentType: contentType, upsert: false),
         );
-    final url = _client.storage.from('attachments').getPublicUrl(path);
-    return Attachment(name: fileName, url: url, contentType: contentType);
+    // The bucket is private: only the object path is stored; readers sign it on demand.
+    return Attachment(name: fileName, path: path, contentType: contentType);
   }
 }

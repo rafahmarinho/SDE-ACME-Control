@@ -28,5 +28,13 @@ class Env {
   /// Android manifest and iOS Info.plist, and in the Supabase redirect URLs).
   static const mobileAuthCallback = 'acmecontrol://auth/reset-password';
 
+  /// Shows the demo-account shortcuts on the sign-in page. Off by default so
+  /// production builds never advertise shared credentials.
+  static const demoMode = bool.fromEnvironment('DEMO_MODE', defaultValue: false);
+
+  /// Optional password pre-filled by the demo-account chips (demo builds only).
+  /// Empty by default so no credential is ever compiled into the app by accident.
+  static const demoPassword = String.fromEnvironment('DEMO_PASSWORD', defaultValue: '');
+
   static bool get isConfigured => supabaseAnonKey.isNotEmpty;
 }

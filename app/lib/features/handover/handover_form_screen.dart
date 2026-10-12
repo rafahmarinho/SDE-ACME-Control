@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/formatters.dart';
+import '../../core/security.dart';
 import '../../core/theme.dart';
 import '../../models/alarm.dart';
 import '../../models/profile.dart';
@@ -39,11 +41,17 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
     super.dispose();
   }
 
+  static const _maxIssueLength = 500;
+
   void _addIssue() {
-    final text = _issue.text.trim();
+    final text = sanitizeText(_issue.text);
     if (text.isEmpty) return;
+    if (text.length > _maxIssueLength) {
+      showSnack(context, 'An issue can have at most $_maxIssueLength characters.', error: true);
+      return;
+    }
     setState(() {
-      _issues.add(text);
+      if (!_issues.contains(text)) _issues.add(text);
       _issue.clear();
     });
   }
@@ -68,8 +76,8 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
             fromUserName: profile.displayName,
             toUser: toUser?.id,
             toUserName: toUser?.displayName,
-            summary: _summary.text,
-            openIssues: _issues,
+            summary: sanitizeText(_summary.text),
+            openIssues: _issues.map(sanitizeText).where((i) => i.isNotEmpty).toList(),
             checklist: _checklist,
             submit: submit,
           );
@@ -145,8 +153,10 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
               controller: _summary,
               maxLines: 5,
               textCapitalization: TextCapitalization.sentences,
+              maxLength: kMaxLongText,
+              maxLengthEnforcement: MaxLengthEnforcement.enforced,
               decoration: const InputDecoration(labelText: 'Shift summary', hintText: 'What happened, what was done, what to watch'),
-              validator: (v) => (v == null || v.trim().length < 10) ? 'Write a short summary (at least 10 characters)' : null,
+              validator: (v) => validateRequiredText(v, label: 'a short summary', max: kMaxLongText, min: 10),
             ),
             if (activeAlarms.isNotEmpty) ...[
               const SizedBox(height: 8),
@@ -171,6 +181,9 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
                   child: TextField(
                     controller: _issue,
                     textCapitalization: TextCapitalization.sentences,
+                    maxLength: _maxIssueLength,
+                    maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                    buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                     decoration: const InputDecoration(hintText: 'Add an issue for the next shift'),
                     onSubmitted: (_) => _addIssue(),
                   ),

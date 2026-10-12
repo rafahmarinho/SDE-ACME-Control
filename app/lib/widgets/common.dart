@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/formatters.dart';
 import '../core/theme.dart';
 import '../models/alarm.dart';
 import '../models/equipment.dart';
 import '../models/maintenance_order.dart';
+import '../providers/connectivity_providers.dart';
 import '../providers/live_data.dart';
+import '../services/storage_service.dart';
+import 'storage_image.dart';
 
 // ------------------------------------------------------------------ colors
 
@@ -552,20 +556,29 @@ Future<bool> confirmDialog(
   return result ?? false;
 }
 
-class UserAvatar extends StatelessWidget {
-  const UserAvatar({super.key, required this.initials, this.imageUrl, this.radius = 16});
+/// Profile picture from the private bucket. [imagePath] is the storage path
+/// (`avatars/<uid>.jpg`) or a legacy public URL; it is resolved to a signed URL.
+/// Initials are shown while loading, offline, or when there is no picture.
+class UserAvatar extends ConsumerWidget {
+  const UserAvatar({super.key, required this.initials, this.imagePath, this.radius = 16});
 
   final String initials;
-  final String? imageUrl;
+  final String? imagePath;
   final double radius;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
+    final path = StorageService.normalize(imagePath);
+    String? url;
+    if (path != null && ref.watch(connectivityProvider)) {
+      url = ref.watch(signedUrlProvider(path)).value;
+    }
     return CircleAvatar(
       radius: radius,
       backgroundColor: scheme.primary.withValues(alpha: 0.2),
-      foregroundImage: imageUrl != null && imageUrl!.isNotEmpty ? NetworkImage(imageUrl!) : null,
+      foregroundImage: url != null ? NetworkImage(url) : null,
+      onForegroundImageError: url != null ? (_, __) {} : null,
       child: Text(
         initials,
         style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w700, fontSize: radius * 0.8),

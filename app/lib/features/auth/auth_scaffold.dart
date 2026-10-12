@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthRetryableFetchException;
 
+import '../../core/security.dart';
 import '../../core/theme.dart';
+import '../../services/auth_service.dart';
 
 /// Shared layout for sign-in, password recovery and reset pages.
 class AuthScaffold extends StatelessWidget {
@@ -81,6 +84,34 @@ class AuthScaffold extends StatelessWidget {
   }
 }
 
+/// Neutral notice (e.g. "You were signed out after a period of inactivity.").
+class AuthInfoBox extends StatelessWidget {
+  const AuthInfoBox(this.message, {super.key});
+
+  final String? message;
+
+  @override
+  Widget build(BuildContext context) {
+    if (message == null) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline, color: AppColors.primary, size: 18),
+          const SizedBox(width: 10),
+          Expanded(child: Text(message!, style: const TextStyle(fontSize: 13))),
+        ],
+      ),
+    );
+  }
+}
+
 class AuthErrorBox extends StatelessWidget {
   const AuthErrorBox(this.message, {super.key});
 
@@ -108,15 +139,40 @@ class AuthErrorBox extends StatelessWidget {
   }
 }
 
+/// Maps authentication errors to fixed, non-revealing messages. Raw server
+/// messages are never shown: every credential problem reads the same, so the
+/// page does not disclose whether an account exists or is confirmed.
 String friendlyAuthError(Object error) {
   final text = error.toString();
-  if (text.contains('Invalid login credentials')) return 'Incorrect e-mail or password.';
-  if (text.contains('Email not confirmed')) return 'This e-mail address has not been confirmed yet.';
-  if (text.contains('rate limit') || text.contains('Too many')) return 'Too many attempts. Please wait a moment and try again.';
-  if (text.contains('SocketException') || text.contains('Failed host lookup') || text.contains('ClientException')) {
+  final lower = text.toLowerCase();
+  if (text.contains(AuthService.wrongCurrentPasswordMessage)) return '${AuthService.wrongCurrentPasswordMessage}.';
+  if (lower.contains('socketexception') ||
+      lower.contains('failed host lookup') ||
+      lower.contains('clientexception') ||
+      lower.contains('xmlhttprequest') ||
+      error is AuthRetryableFetchException) {
     return 'Cannot reach the authentication server. Check your connection.';
   }
-  if (text.contains('Password should be')) return 'Password must be at least 6 characters.';
-  if (text.contains('same password')) return 'The new password must be different from the old one.';
-  return text.replaceFirst(RegExp(r'^AuthException: '), '').replaceFirst(RegExp(r'^AuthApiException: '), '').replaceFirst(RegExp(r', statusCode: .*$'), '');
+  if (lower.contains('rate limit') || lower.contains('too many') || lower.contains('over_request_rate_limit')) {
+    return 'Too many attempts. Please wait a moment and try again.';
+  }
+  if (lower.contains('invalid login credentials') ||
+      lower.contains('invalid_credentials') ||
+      lower.contains('user not found') ||
+      lower.contains('user_not_found') ||
+      lower.contains('email not confirmed') ||
+      lower.contains('email_not_confirmed') ||
+      lower.contains('invalid_grant')) {
+    return 'Incorrect e-mail or password.';
+  }
+  if (lower.contains('password should be') || lower.contains('weak_password')) {
+    return 'The password does not meet the policy. $passwordPolicyHint.';
+  }
+  if (lower.contains('same password') || lower.contains('same_password')) {
+    return 'The new password must be different from the old one.';
+  }
+  if (lower.contains('session') && (lower.contains('expired') || lower.contains('missing'))) {
+    return 'Your session expired. Please sign in again.';
+  }
+  return 'Sign-in failed. Please try again.';
 }

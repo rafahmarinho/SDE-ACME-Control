@@ -11,7 +11,12 @@ class AppSettings {
     this.confirmCommands = true,
     this.alarmBanner = true,
     this.showSimClock = true,
+    this.idleTimeoutMinutes = kDefaultIdleTimeoutMinutes,
   });
+
+  static const kDefaultIdleTimeoutMinutes = 30;
+  static const kMinIdleTimeoutMinutes = 5;
+  static const kMaxIdleTimeoutMinutes = 240;
 
   final ThemeMode themeMode;
 
@@ -26,12 +31,16 @@ class AppSettings {
 
   final bool showSimClock;
 
+  /// Minutes without user interaction before the app signs out automatically.
+  final int idleTimeoutMinutes;
+
   AppSettings copyWith({
     ThemeMode? themeMode,
     int? refreshSeconds,
     bool? confirmCommands,
     bool? alarmBanner,
     bool? showSimClock,
+    int? idleTimeoutMinutes,
   }) =>
       AppSettings(
         themeMode: themeMode ?? this.themeMode,
@@ -39,6 +48,7 @@ class AppSettings {
         confirmCommands: confirmCommands ?? this.confirmCommands,
         alarmBanner: alarmBanner ?? this.alarmBanner,
         showSimClock: showSimClock ?? this.showSimClock,
+        idleTimeoutMinutes: idleTimeoutMinutes ?? this.idleTimeoutMinutes,
       );
 
   Map<String, dynamic> toJson() => {
@@ -47,6 +57,7 @@ class AppSettings {
         'confirm_commands': confirmCommands,
         'alarm_banner': alarmBanner,
         'show_sim_clock': showSimClock,
+        'idle_timeout_minutes': idleTimeoutMinutes,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
@@ -58,6 +69,8 @@ class AppSettings {
         confirmCommands: json['confirm_commands'] != false,
         alarmBanner: json['alarm_banner'] != false,
         showSimClock: json['show_sim_clock'] != false,
+        idleTimeoutMinutes: (json['idle_timeout_minutes'] as num?)?.toInt().clamp(kMinIdleTimeoutMinutes, kMaxIdleTimeoutMinutes) ??
+            kDefaultIdleTimeoutMinutes,
       );
 }
 

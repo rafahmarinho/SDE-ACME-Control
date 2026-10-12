@@ -124,7 +124,7 @@ Local alternative: `supabase start` uses `supabase/config.toml`, applies the mig
 
 The demo accounts share one documented password so the demo can be explored. Before any real deployment, delete them
 or rotate their passwords (Authentication → Users). The sign-in page only shows the demo-account shortcuts when the
-app is built with `DEMO_MODE=true`.
+app is built with `DEMO_MODE=true` (and fills the password from `DEMO_PASSWORD`).
 
 | E-mail | Name | Role |
 | --- | --- | --- |
@@ -190,7 +190,7 @@ tooling (`flutter doctor`).
 
 ```bash
 cd app
-cp env.example.json env.json          # SUPABASE_URL, SUPABASE_ANON_KEY, API_BASE_URL, WEB_APP_URL, DEMO_MODE
+cp env.example.json env.json          # SUPABASE_URL, SUPABASE_ANON_KEY, API_BASE_URL, WEB_APP_URL, DEMO_MODE, DEMO_PASSWORD
 flutter pub get
 flutter run -d chrome --web-port 3000 --dart-define-from-file=env.json
 ```
@@ -199,7 +199,8 @@ flutter run -d chrome --web-port 3000 --dart-define-from-file=env.json
 (on the Android emulator use `http://10.0.2.2:3001/api`, on a physical phone the LAN IP of your machine).
 `SUPABASE_ANON_KEY` accepts the project's publishable key (`sb_publishable_…`) or the legacy anon JWT.
 `WEB_APP_URL` is where the web app is served (used in password-recovery links). `DEMO_MODE=true` shows the
-demo-account shortcuts on the sign-in page (keep it `false` for real deployments). Configuration is injected at build
+demo-account shortcuts on the sign-in page and `DEMO_PASSWORD` is the password those shortcuts fill in (keep both
+unset for real deployments; the password is no longer hard-coded in the app). Configuration is injected at build
 time with `--dart-define-from-file`; never put the service role key in the app.
 
 Session security: the session is stored in the Android Keystore / iOS Keychain (`flutter_secure_storage`), the app
@@ -229,7 +230,7 @@ npx vercel --prod build/web           # answer "no" to the framework questions; 
 
 Option B – let Vercel build it: create a Vercel project with root directory `app`. `app/vercel.json` runs
 `scripts/vercel-build.sh`, which clones the Flutter SDK and runs `flutter build web`. Add the environment variables
-`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `API_BASE_URL` and `WEB_APP_URL` to the project.
+`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `API_BASE_URL`, `WEB_APP_URL` and optionally `DEMO_MODE` / `DEMO_PASSWORD` to the project.
 
 After deploying, add the web URL to the Supabase redirect URLs (see step 1.3) and, if the API uses a restricted
 `CORS_ORIGINS`, add the web origin there too.

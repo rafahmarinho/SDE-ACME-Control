@@ -7,7 +7,6 @@ import '../../core/theme.dart';
 import '../../models/plant.dart';
 import '../../providers/auth_providers.dart';
 import '../../providers/connectivity_providers.dart';
-import '../../providers/core_providers.dart';
 import '../../providers/live_notifiers.dart';
 import '../../providers/plant_providers.dart';
 import '../../providers/settings_providers.dart';
@@ -37,6 +36,16 @@ class AppShell extends ConsumerWidget {
     final tabs = mobileTabsFor(role);
     var tabIndex = tabs.indexWhere((d) => d.matches(path));
     if (tabIndex < 0 && mobile) tabIndex = tabs.length - 1;
+
+    // "Previous sign-in: ..." once per sign-in, as soon as the profile is known.
+    ref.listen(signInSessionProvider.select((s) => s.noticePending), (_, pending) {
+      if (pending) _showPreviousSignIn(context, ref);
+    });
+    if (ref.read(signInSessionProvider).noticePending) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) _showPreviousSignIn(context, ref);
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -144,6 +153,23 @@ class AppShell extends ConsumerWidget {
           : null,
     );
   }
+}
+
+void _showPreviousSignIn(BuildContext context, WidgetRef ref) {
+  final at = ref.read(signInSessionProvider.notifier).consumeNotice();
+  if (at == null || !context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      duration: const Duration(seconds: 6),
+      content: Row(
+        children: [
+          const Icon(Icons.history, size: 18, color: AppColors.primary),
+          const SizedBox(width: 10),
+          Expanded(child: Text('Previous sign-in: ${fmtDateTime(at)}')),
+        ],
+      ),
+    ),
+  );
 }
 
 class _PlantSwitcher extends ConsumerWidget {
@@ -283,7 +309,7 @@ class _UserMenu extends ConsumerWidget {
             context.go('/settings');
           case 'signout':
             final ok = await confirmDialog(context, title: 'Sign out', message: 'Sign out of ACME Control on this device?', confirmLabel: 'Sign out');
-            if (ok) await ref.read(authServiceProvider).signOut();
+            if (ok) await signOutEverywhere(ref.read);
         }
       },
       itemBuilder: (_) => [
@@ -304,7 +330,7 @@ class _UserMenu extends ConsumerWidget {
       ],
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6),
-        child: UserAvatar(initials: profile?.initials ?? '?', imageUrl: profile?.avatarUrl),
+        child: UserAvatar(initials: profile?.initials ?? '?', imagePath: profile?.avatarUrl),
       ),
     );
   }

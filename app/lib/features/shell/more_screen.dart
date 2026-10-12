@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme.dart';
 import '../../providers/auth_providers.dart';
-import '../../providers/core_providers.dart';
 import '../../widgets/common.dart';
 import 'navigation.dart';
 
@@ -25,7 +24,7 @@ class MoreScreen extends ConsumerWidget {
         children: [
           Card(
             child: ListTile(
-              leading: UserAvatar(initials: profile?.initials ?? '?', imageUrl: profile?.avatarUrl, radius: 22),
+              leading: UserAvatar(initials: profile?.initials ?? '?', imagePath: profile?.avatarUrl, radius: 22),
               title: Text(profile?.displayName ?? ''),
               subtitle: Text(profile?.role.label ?? ''),
               trailing: const Icon(Icons.chevron_right),
@@ -65,7 +64,7 @@ class MoreScreen extends ConsumerWidget {
                   title: const Text('Sign out'),
                   onTap: () async {
                     final ok = await confirmDialog(context, title: 'Sign out', message: 'Sign out of ACME Control on this device?', confirmLabel: 'Sign out');
-                    if (ok) await ref.read(authServiceProvider).signOut();
+                    if (ok) await signOutEverywhere(ref.read);
                   },
                 ),
               ],

@@ -19,6 +19,7 @@ dependencies:
   http: ^1.3.0
   image_picker: ^1.1.0
   app_links: ^7.0.0
+  flutter_secure_storage: ^9.2.4
   cupertino_icons: ^2.0.0
 
 dev_dependencies:
@@ -28,3 +29,11 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+# flutter_secure_storage (Windows implementation) pulls in path_provider, whose
+# 2.6.x Darwin implementation depends on package:objective_c, which ships a
+# native build hook. The Flutter hook runner on Windows cannot compile hooks
+# when the SDK lives in a path containing spaces (as on this machine), which
+# breaks `flutter test` / `flutter build`. 2.5.1 is the last hook-free release.
+dependency_overrides:
+  path_provider_foundation: 2.5.1

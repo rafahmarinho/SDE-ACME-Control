@@ -4,8 +4,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/env.dart';
 import '../../core/theme.dart';
 import '../../providers/core_providers.dart';
+import '../../providers/session_guard.dart';
 import '../../providers/settings_providers.dart';
 import '../../widgets/common.dart';
+
+String _fmtMinutes(int minutes) {
+  if (minutes < 60) return '$minutes min';
+  final h = minutes ~/ 60;
+  final m = minutes % 60;
+  return m == 0 ? '$h h' : '$h h $m min';
+}
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -91,6 +99,32 @@ class SettingsScreen extends ConsumerWidget {
                   onChanged: (v) => notifier.update(settings.copyWith(alarmBanner: v)),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          const SectionHeader(title: 'Security'),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Sign out after ${_fmtMinutes(settings.idleTimeoutMinutes)} of inactivity', style: theme.textTheme.labelLarge),
+                  Slider(
+                    value: settings.idleTimeoutMinutes.toDouble(),
+                    min: AppSettings.kMinIdleTimeoutMinutes.toDouble(),
+                    max: AppSettings.kMaxIdleTimeoutMinutes.toDouble(),
+                    divisions: (AppSettings.kMaxIdleTimeoutMinutes - AppSettings.kMinIdleTimeoutMinutes) ~/ 5,
+                    label: _fmtMinutes(settings.idleTimeoutMinutes),
+                    onChanged: (v) => notifier.update(settings.copyWith(idleTimeoutMinutes: (v / 5).round() * 5)),
+                  ),
+                  Text(
+                    'Without taps, clicks or scrolling for this long the app signs you out. '
+                    'Sessions also end automatically ${SessionGuard.absoluteTimeout.inHours} hours after sign-in.',
+                    style: theme.textTheme.bodySmall?.copyWith(color: AppColors.muted),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 16),

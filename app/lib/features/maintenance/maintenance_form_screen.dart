@@ -1,10 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/formatters.dart';
+import '../../core/security.dart';
 import '../../core/theme.dart';
 import '../../models/equipment.dart';
 import '../../models/maintenance_order.dart';
@@ -97,8 +99,8 @@ class _MaintenanceFormScreenState extends ConsumerState<MaintenanceFormScreen> {
     try {
       final order = await ref.read(maintenanceRepositoryProvider).create(
             plantId: plantId,
-            title: _title.text,
-            description: _description.text,
+            title: sanitizeText(_title.text),
+            description: sanitizeText(_description.text),
             priority: _priority,
             createdBy: profile.id,
             createdByName: profile.displayName,
@@ -146,15 +148,21 @@ class _MaintenanceFormScreenState extends ConsumerState<MaintenanceFormScreen> {
             TextFormField(
               controller: _title,
               textCapitalization: TextCapitalization.sentences,
+              maxLength: kMaxShortText,
+              maxLengthEnforcement: MaxLengthEnforcement.enforced,
+              buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
               decoration: const InputDecoration(labelText: 'Title', hintText: 'e.g. Replace mechanical seal on P1'),
-              validator: (v) => (v == null || v.trim().length < 4) ? 'Enter a title (at least 4 characters)' : null,
+              validator: (v) => validateRequiredText(v, label: 'a title', max: kMaxShortText, min: 4),
             ),
             const SizedBox(height: 14),
             TextFormField(
               controller: _description,
               maxLines: 4,
               textCapitalization: TextCapitalization.sentences,
+              maxLength: kMaxLongText,
+              maxLengthEnforcement: MaxLengthEnforcement.enforced,
               decoration: const InputDecoration(labelText: 'Description', hintText: 'What needs to be done, findings, safety notes'),
+              validator: (v) => validateOptionalText(v, max: kMaxLongText),
             ),
             const SizedBox(height: 14),
             DropdownButtonFormField<String?>(

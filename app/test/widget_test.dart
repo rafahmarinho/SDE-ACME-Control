@@ -1,10 +1,13 @@
+import 'package:acme_control/core/env.dart';
 import 'package:acme_control/core/formatters.dart';
+import 'package:acme_control/features/auth/auth_scaffold.dart';
 import 'package:acme_control/features/auth/login_screen.dart';
 import 'package:acme_control/models/equipment.dart';
 import 'package:acme_control/models/process_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthException;
 
 void main() {
   group('models', () {
@@ -63,13 +66,35 @@ void main() {
     });
   });
 
-  testWidgets('login screen renders demo accounts', (tester) async {
+  testWidgets('login screen shows demo accounts only in demo builds', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: MaterialApp(home: LoginScreen())));
     expect(find.text('Sign in'), findsWidgets);
-    expect(find.text('Operator'), findsOneWidget);
-    expect(find.text('Supervisor'), findsOneWidget);
-    await tester.tap(find.text('Engineer'));
-    await tester.pump();
-    expect(find.text('engineer@acme.demo'), findsOneWidget);
+    expect(find.text('Forgot password?'), findsOneWidget);
+    if (Env.demoMode) {
+      expect(find.text('Operator'), findsOneWidget);
+      await tester.tap(find.text('Engineer'));
+      await tester.pump();
+      expect(find.text('engineer@acme.demo'), findsOneWidget);
+    } else {
+      expect(find.text('Demo accounts'), findsNothing);
+      expect(find.text('Operator'), findsNothing);
+    }
+  });
+
+  testWidgets('login screen explains automatic sign-outs', (tester) async {
+    await tester.pumpWidget(const ProviderScope(child: MaterialApp(home: LoginScreen(reason: 'idle'))));
+    expect(find.text('You were signed out after a period of inactivity.'), findsOneWidget);
+
+    await tester.pumpWidget(const ProviderScope(child: MaterialApp(home: LoginScreen(reason: 'expired'))));
+    expect(find.text('Your session expired. Please sign in again.'), findsOneWidget);
+  });
+
+  test('auth errors never echo server messages', () {
+    expect(friendlyAuthError(const AuthException('Invalid login credentials')), 'Incorrect e-mail or password.');
+    expect(friendlyAuthError(const AuthException('Email not confirmed')), 'Incorrect e-mail or password.');
+    expect(friendlyAuthError(const AuthException('User not found', code: 'user_not_found')), 'Incorrect e-mail or password.');
+    expect(friendlyAuthError(const AuthException('rate limit exceeded')), startsWith('Too many attempts'));
+    expect(friendlyAuthError(Exception('SocketException: Failed host lookup')), startsWith('Cannot reach'));
+    expect(friendlyAuthError(const AuthException('Database error saving user: secret table')), 'Sign-in failed. Please try again.');
   });
 }

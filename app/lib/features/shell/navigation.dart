@@ -106,6 +106,14 @@ final allDestinations = <NavDestination>[
     path: '/plants',
     subtitle: 'Switch between plants',
   ),
+  NavDestination(
+    label: 'Security',
+    icon: Icons.security_outlined,
+    selectedIcon: Icons.security,
+    path: '/security',
+    subtitle: 'Authentication and authorisation audit log',
+    visible: (r) => r.canViewSecurityLog,
+  ),
 ];
 
 const profileDestination = NavDestination(

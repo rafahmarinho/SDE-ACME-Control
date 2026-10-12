@@ -34,6 +34,24 @@ class AuthService {
     await _client.auth.updateUser(UserAttributes(password: newPassword));
   }
 
+  /// Changes the password after re-authenticating with the current one.
+  /// Throws [AuthException] with a user-friendly message when the current
+  /// password is wrong.
+  Future<void> changePassword({
+    required String email,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      await _client.auth.signInWithPassword(email: email.trim(), password: currentPassword);
+    } on AuthApiException {
+      throw const AuthException(wrongCurrentPasswordMessage);
+    }
+    await _client.auth.updateUser(UserAttributes(password: newPassword));
+  }
+
+  static const wrongCurrentPasswordMessage = 'Current password is incorrect';
+
   Future<Profile?> fetchProfile(String userId) async {
     final row = await _client.from('profiles').select().eq('id', userId).maybeSingle();
     return row == null ? null : Profile.fromJson(row);
@@ -62,6 +80,8 @@ class AuthService {
     return Profile.fromJson(row);
   }
 
+  /// Uploads the picture to `avatars/<uid>.<ext>` in the private bucket and
+  /// returns that storage PATH (stored in `profiles.avatar_url`).
   Future<String> uploadAvatar(String userId, Uint8List bytes, String contentType) async {
     final ext = contentType.split('/').last;
     final path = 'avatars/$userId.${ext == 'jpeg' ? 'jpg' : ext}';
@@ -70,8 +90,6 @@ class AuthService {
           bytes,
           fileOptions: FileOptions(contentType: contentType, upsert: true),
         );
-    final url = _client.storage.from('attachments').getPublicUrl(path);
-    // cache-bust so the new picture shows immediately
-    return '$url?v=${DateTime.now().millisecondsSinceEpoch}';
+    return path;
   }
 }

@@ -32,20 +32,46 @@ String maintenanceStatusLabel(MaintenanceStatus s) {
   }
 }
 
+/// File stored in the private `attachments` bucket.
+///
+/// New rows carry the storage object [path]; rows written before the bucket
+/// became private only have a public [url], from which the path is derived.
 class Attachment {
-  const Attachment({required this.name, required this.url, this.contentType});
+  const Attachment({required this.name, this.path, this.url, this.contentType});
 
   final String name;
-  final String url;
+  final String? path;
+  final String? url;
   final String? contentType;
+
+  static const _legacyMarker = '/storage/v1/object/public/attachments/';
+
+  static String? pathFromLegacyUrl(String? url) {
+    if (url == null) return null;
+    final i = url.indexOf(_legacyMarker);
+    if (i < 0) return null;
+    var rest = url.substring(i + _legacyMarker.length);
+    final q = rest.indexOf('?');
+    if (q >= 0) rest = rest.substring(0, q);
+    return rest.isEmpty ? null : Uri.decodeComponent(rest);
+  }
+
+  /// Storage path to sign, or null when the row cannot be resolved.
+  String? get storagePath => path ?? pathFromLegacyUrl(url);
 
   factory Attachment.fromJson(Map<String, dynamic> json) => Attachment(
         name: json['name'] as String? ?? 'file',
-        url: json['url'] as String? ?? '',
+        path: json['path'] as String?,
+        url: json['url'] as String?,
         contentType: json['content_type'] as String?,
       );
 
-  Map<String, dynamic> toJson() => {'name': name, 'url': url, 'content_type': contentType};
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        if (path != null) 'path': path,
+        if (url != null) 'url': url,
+        'content_type': contentType,
+      };
 
   bool get isImage => (contentType ?? '').startsWith('image/');
 }

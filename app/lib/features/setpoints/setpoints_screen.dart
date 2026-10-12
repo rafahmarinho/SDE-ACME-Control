@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/formatters.dart';
+import '../../core/security.dart';
 import '../../core/theme.dart';
 import '../../models/setpoint.dart';
 import '../../providers/auth_providers.dart';
@@ -61,7 +63,14 @@ class _SetpointsScreenState extends ConsumerState<SetpointsScreen> {
             const SizedBox(height: 6),
             Text('Proposed by ${r.requestedByName ?? 'unknown'}: ${r.justification}', style: const TextStyle(color: AppColors.muted, fontSize: 13)),
             const SizedBox(height: 14),
-            TextField(controller: note, maxLines: 2, decoration: const InputDecoration(labelText: 'Review note (optional)')),
+            TextField(
+              controller: note,
+              maxLines: 2,
+              maxLength: kMaxShortText,
+              maxLengthEnforcement: MaxLengthEnforcement.enforced,
+              buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
+              decoration: const InputDecoration(labelText: 'Review note (optional)'),
+            ),
           ],
         ),
         actions: [
@@ -76,7 +85,7 @@ class _SetpointsScreenState extends ConsumerState<SetpointsScreen> {
     );
     if (ok != true) return;
     try {
-      await ref.read(apiClientProvider).reviewSetpoint(r.id, approve: approve, note: note.text.trim());
+      await ref.read(apiClientProvider).reviewSetpoint(r.id, approve: approve, note: sanitizeText(note.text));
       if (mounted) showSnack(context, approve ? 'Setpoint ${r.setpointKey} updated' : 'Proposal rejected', success: true);
     } on ApiException catch (e) {
       if (mounted) showSnack(context, e.message, error: true);
@@ -257,11 +266,12 @@ class _ProposeDialogState extends State<_ProposeDialog> {
       setState(() => _error = 'Proposed value equals the current value');
       return;
     }
-    if (_justification.text.trim().length < 5) {
+    final justification = sanitizeText(_justification.text);
+    if (justification.length < 5) {
       setState(() => _error = 'Please explain why the change is needed');
       return;
     }
-    Navigator.of(context).pop((v, _justification.text.trim()));
+    Navigator.of(context).pop((v, justification));
   }
 
   @override
@@ -302,6 +312,8 @@ class _ProposeDialogState extends State<_ProposeDialog> {
             TextField(
               controller: _justification,
               maxLines: 3,
+              maxLength: kMaxJustification,
+              maxLengthEnforcement: MaxLengthEnforcement.enforced,
               decoration: const InputDecoration(labelText: 'Justification', hintText: 'Why is this change needed?'),
             ),
           ],

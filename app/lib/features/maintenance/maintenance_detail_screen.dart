@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/formatters.dart';
+import '../../core/security.dart';
 import '../../core/theme.dart';
 import '../../models/equipment.dart';
 import '../../models/maintenance_order.dart';
@@ -12,6 +14,7 @@ import '../../providers/core_providers.dart';
 import '../../providers/live_notifiers.dart';
 import '../../widgets/common.dart';
 import '../../widgets/equipment_control_panel.dart';
+import '../../widgets/storage_image.dart';
 import 'maintenance_tile.dart';
 
 class MaintenanceDetailScreen extends ConsumerStatefulWidget {
@@ -38,7 +41,14 @@ class _MaintenanceDetailScreenState extends ConsumerState<MaintenanceDetailScree
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Complete work order'),
-          content: TextField(controller: controller, maxLines: 4, autofocus: true, decoration: const InputDecoration(labelText: 'Work notes', hintText: 'What was done, parts used, test results')),
+          content: TextField(
+            controller: controller,
+            maxLines: 4,
+            autofocus: true,
+            maxLength: kMaxLongText,
+            maxLengthEnforcement: MaxLengthEnforcement.enforced,
+            decoration: const InputDecoration(labelText: 'Work notes', hintText: 'What was done, parts used, test results'),
+          ),
           actions: [
             TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
             FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Complete')),
@@ -46,7 +56,7 @@ class _MaintenanceDetailScreenState extends ConsumerState<MaintenanceDetailScree
         ),
       );
       if (ok != true) return;
-      notes = controller.text.trim();
+      notes = sanitizeText(controller.text);
     } else if (status == MaintenanceStatus.cancelled) {
       final ok = await confirmDialog(context, title: 'Cancel work order', message: 'Cancel ${o.code}? This cannot be undone.', confirmLabel: 'Cancel order', destructive: true);
       if (!ok) return;
@@ -155,10 +165,8 @@ class _MaintenanceDetailScreenState extends ConsumerState<MaintenanceDetailScree
                   children: [
                     for (final a in o.attachments)
                       a.isImage
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: Image.network(a.url, width: 160, height: 120, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(width: 160, height: 120, color: AppColors.surfaceHigh, child: const Icon(Icons.broken_image_outlined))),
-                            )
+                          // Private bucket: the path is resolved to a signed URL on demand.
+                          ? StorageImage(source: a.storagePath, width: 160, height: 120, borderRadius: BorderRadius.circular(10))
                           : Chip(avatar: const Icon(Icons.attach_file, size: 16), label: Text(a.name)),
                   ],
                 ),

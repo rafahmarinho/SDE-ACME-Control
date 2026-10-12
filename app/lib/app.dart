@@ -10,6 +10,7 @@ import 'core/router.dart';
 import 'core/theme.dart';
 import 'providers/auth_providers.dart';
 import 'providers/connectivity_providers.dart';
+import 'providers/session_guard.dart';
 import 'providers/settings_providers.dart';
 import 'providers/sim_ticker.dart';
 
@@ -35,11 +36,11 @@ class _AcmeControlAppState extends ConsumerState<AcmeControlApp> with WidgetsBin
   }
 
   void _handleLink(Uri uri) {
-    if (uri.scheme == 'acmecontrol' && uri.path.contains('reset-password')) {
-      Future.delayed(const Duration(milliseconds: 300), () {
-        if (mounted) ref.read(routerProvider).go('/reset-password');
-      });
-    }
+    // Only the exact password-recovery callback is honoured; any other link is ignored.
+    if (uri.scheme != 'acmecontrol' || uri.host != 'auth' || uri.path != '/reset-password') return;
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) ref.read(routerProvider).go('/reset-password');
+    });
   }
 
   @override
@@ -61,8 +62,12 @@ class _AcmeControlAppState extends ConsumerState<AcmeControlApp> with WidgetsBin
     final router = ref.watch(routerProvider);
     final settings = ref.watch(settingsProvider);
 
-    // Keep the simulation ticker alive for the whole app lifetime.
+    // Keep the simulation ticker, the session guard (idle / absolute timeout)
+    // and the sign-in bookkeeping alive for the whole app lifetime.
     ref.watch(simTickerProvider);
+    ref.watch(sessionGuardProvider);
+    ref.watch(signInSessionProvider.select((s) => s.userId));
+    final guard = ref.read(sessionGuardProvider.notifier);
 
     ref.listen(authStateProvider, (previous, next) {
       final event = next.value?.event;
@@ -78,6 +83,13 @@ class _AcmeControlAppState extends ConsumerState<AcmeControlApp> with WidgetsBin
       darkTheme: buildAppTheme(Brightness.dark),
       themeMode: settings.themeMode,
       routerConfig: router,
+      // Every tap, click or scroll counts as activity for the idle timeout.
+      builder: (context, child) => Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (_) => guard.touch(),
+        onPointerSignal: (_) => guard.touch(),
+        child: child ?? const SizedBox.shrink(),
+      ),
     );
   }
 }

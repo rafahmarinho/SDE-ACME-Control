@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/formatters.dart';
+import '../../core/security.dart';
 import '../../core/theme.dart';
 import '../../models/profile.dart';
 import '../../models/shift_handover.dart';
@@ -70,7 +72,13 @@ class _HandoverDetailScreenState extends ConsumerState<HandoverDetailScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Edit summary'),
-        content: TextField(controller: controller, maxLines: 6, autofocus: true),
+        content: TextField(
+          controller: controller,
+          maxLines: 6,
+          autofocus: true,
+          maxLength: kMaxLongText,
+          maxLengthEnforcement: MaxLengthEnforcement.enforced,
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
           FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Save')),
@@ -79,7 +87,7 @@ class _HandoverDetailScreenState extends ConsumerState<HandoverDetailScreen> {
     );
     if (ok != true) return;
     try {
-      await ref.read(handoverRepositoryProvider).update(h.id, {'summary': controller.text.trim()});
+      await ref.read(handoverRepositoryProvider).update(h.id, {'summary': sanitizeText(controller.text)});
     } catch (e) {
       if (mounted) showSnack(context, describeError(e), error: true);
     }
