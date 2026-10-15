@@ -1,5 +1,6 @@
 # Node / API
 node_modules/
+/demo/
 .vercel/
 dist/
 *.log

@@ -18,6 +18,7 @@ ACME Control/
 ├─ supabase/   SQL migrations (schema, RLS, realtime, storage, demo-data generator, security controls) and seed
 ├─ docs/security/  Threat model, controls map and the SD Elements assessment (585 countermeasures)
 ├─ scripts/sde/    Builds the assessment and syncs statuses + bilingual notes to SD Elements
+├─ demo/           Local demo stack + narrated walkthrough videos per role (Playwright, Kokoro TTS, ffmpeg)
 └─ SECURITY.md     Vulnerability reporting policy
 ```
 
@@ -319,6 +320,19 @@ anti-tampering checks, privacy notices and consent not implemented, demo account
    required, policy enforced). Set the idle timeout to 5 minutes in Settings → Security and wait: the app signs you
    out with an explanation. Sign in as **maintenance** and try `POST /api/commands` with the session token: the API
    answers 403 and the denial appears in the security log.
+
+## Demo videos
+
+`demo/` runs the whole system locally on the seed test data (isolated Supabase in Docker, the API and
+the web build) and records one narrated 1080p walkthrough per role, with captions, zoom and cursor.
+See [demo/README.md](demo/README.md):
+
+```bash
+cd demo
+npm install
+npm run stack:up
+npm run demo
+```
 
 ## Notes
 
